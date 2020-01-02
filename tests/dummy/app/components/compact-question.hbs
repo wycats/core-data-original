@@ -1,0 +1,7 @@
+<div class="compact-question">
+  <div class="votes count"><span>{{this.votes}}</span><span>votes</span></div>
+  <div class="answers count"><span>{{this.answers}}</span><span>answers</span></div>
+  <div class="title">
+    <LinkTo @route="question" @model={{@question}}>{{select "title" from=@question}}</LinkTo>
+  </div>
+</div>

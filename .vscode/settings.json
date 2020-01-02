@@ -1,0 +1,9 @@
+{
+  "search.useGlobalIgnoreFiles": true,
+  "files.exclude": {
+    "{tests,addon}/**/*.d.ts": true,
+    "addon/**/*.js": true,
+    "tests/{integration,unit}/**/*.js": true,
+    "tests/dummy/app/{components,services,routes,helpers}/**/*.{js,d.ts}": true
+  }
+}

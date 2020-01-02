@@ -1,0 +1,16 @@
+<div class="qanda">
+  <div class="question">
+    <h1>{{select "title" from=@question}}</h1>
+    <button class="up" {{on "click" this.upvote}}>👍</button>
+    <button class="down" {{on "click" this.downvote}}>👎</button>
+    <div class="count">{{this.votes}}</div>
+    <div class="body">{{select "body" from=@question}}</div>
+  </div>
+
+  <div class="answers">
+    <h2>{{count this.answers}} Answers</h2>
+    {{#each this.answers as |answer|}}
+      <Answer @model={{answer}} />
+    {{/each}}
+  </div>
+</div>
