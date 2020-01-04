@@ -1,3 +1,7 @@
+body {
+  padding-bottom: 3rem;
+}
+
 .app,
 .spacex {
   background-color: white;
@@ -101,4 +105,14 @@
 .answer .body,
 .question .body {
   grid-area: body;
+}
+
+.spacex {
+  display: grid;
+  grid-auto-rows: auto;
+  grid-row-gap: 1rem;
+}
+
+.spacex .launch {
+  display: grid;
 }

@@ -6,5 +6,6 @@ export default class extends Component {
     args: {
         model: Entity<"question">;
     };
+    vote(direction: "up" | "down"): void;
     get votes(): number;
 }

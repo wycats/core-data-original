@@ -6,7 +6,8 @@ import Table, {
   Entity,
   InternalRow,
   SCHEMA,
-  SpecifiedRow
+  SpecifiedRow,
+  PrimaryKey,
 } from "./table";
 import { expect } from "./utils";
 
@@ -96,6 +97,14 @@ export default class Database<T extends Types> {
     row[INTERNAL_ROW].update(updates);
   }
 
+  add<N extends keyof T & string>(
+    name: N,
+    row: SpecifiedRow<T, N>,
+  ): void {
+    let table = this.get(name);
+    table.add(row);
+  }
+
   populate<N extends keyof T & string>(
     name: N,
     data: FakeData,
@@ -111,6 +120,10 @@ export default class Database<T extends Types> {
     }
 
     return out;
+  }
+
+  nextId(): PrimaryKey {
+    return [`${ID++}`];
   }
 }
 

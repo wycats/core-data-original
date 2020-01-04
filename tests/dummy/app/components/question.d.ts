@@ -6,9 +6,9 @@ export default class extends Component {
     args: {
         question: Entity<"question">;
     };
-    upvote(): void;
-    downvote(): void;
+    vote(direction: "up" | "down"): void;
+    generateAnswer(): void;
+    get answers(): Entity<"answer">[];
     get votes(): number;
-    get answers(): import("../../../../addon/selection").MultipleSelection<import("../services/db").QandaSchema, "answer">;
     get answerCount(): number;
 }

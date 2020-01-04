@@ -259,6 +259,136 @@ export default class extends Component {
 }
 ```
 
+# Tagged Collections
+
+Let's say we want to list the latest questions on `/questions/latest`.
+
+We don't have all of the questions in the client-side, so we won't be able to just sort the local questions. Instead, we want our server to tell us what entities are the latest.
+
+## On-the-Fly Collections
+
+```ts
+export default class LatestQuestion extends Route {
+  @service db;
+
+  async model() {
+    let latest = this.db.collectionFor("question");
+
+    let response = await fetch("/question/latest.json");
+    let latestPayload = await response.json();
+
+    for (let payload of latest) {
+      latest.add(db.entity("question", payload.id));
+      this.db.add("question", normalize(payload));
+    }
+
+    // Not sure if this is really necessary, but it's probably a good
+    // idea to have a way to bracket async changes
+    latest.commit();
+
+    return latest;
+  }
+}
+```
+
+## Pagination and Metadata
+
+Pagination is another area where your server does the heavy lifting of giving you a curated subset of resources with information on how to get the next page.
+
+You can add metadata to on-the-fly collections that you can use later.
+
+```ts
+export default class LatestQuestion extends Route {
+  @service db;
+
+  async model() {
+    // a list of questions paginated and sorted by the server
+    let latest = this.db.collectionFor("question");
+
+    // in the real world you would not use page numbers -- this is just for illustration
+    let response = await fetch("/question/latest.json?page=1");
+
+    // {
+    //   "questions": [ ... ],
+    //   "more": "<url>"
+    // }
+    let latestPayload = await response.json();
+
+    latest.setMeta({ nextURL: latestPayload.more });
+
+    for (let payload of latest) {
+      latest.add(db.entity("question", payload.id));
+      this.db.add("question", normalize(payload));
+    }
+
+    latest.commit();
+
+    return latest;
+  }
+}
+```
+
+### Latest Component
+
+latest.hbs
+
+```hbs
+<h1>Latest Questions</h1>
+
+{{#each @model as |question|}}
+  <Question @question={{question}} />
+{{/each}}
+
+<button {{on "click" this.more}}>More...</button>
+```
+
+latest.js
+
+```ts
+export default class extends Component {
+  @use db!: QandaDatabase;
+
+  declare args: { model: AnnotatedCollection<"question", { nextURL: string }> };
+
+  @action async more() {
+    let latest = this.args.model.begin();
+
+    // in the real world you would not use page numbers -- this is just for illustration
+    let response = await fetch(latest.meta.nextURL);
+
+    // { "questions": [ ... ], "more": "<url>" }
+    let latestPayload = await response.json();
+
+    latest.setMeta({ nextURL: latestPayload.more });
+
+    for (let payload of latest) {
+      // this is the "infinite" approach, where "more" keeps adding stuff to the list
+      latest.add(db.entity("question", payload.id));
+      this.db.add("question", normalize(payload));
+    }
+
+    latest.commit();
+  }
+}
+```
+
+# Collections
+
+```ts
+let latestQuestions = db.collection("question");
+
+// the json is an array of question objects
+let response = await fetch("/questions?latest");
+let json = await response.json();
+
+let entities = json.map(item => {
+  // normalize into canonical form if needed, details TBD
+  return db.add("question", item);
+});
+
+latestQuestions.update(entities);
+```
+
 # TODO
 
 ```ts

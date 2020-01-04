@@ -1,4 +1,4 @@
-import Schema, { IdType } from "./schema";
+import Schema from "./schema";
 import { assert } from "./utils";
 import { SingleSelection, ENTITY, Query } from "./selection";
 import { tracked } from "@glimmer/tracking";
@@ -9,7 +9,7 @@ export type SpecifiedDataType<T extends Types, N extends keyof T & string> =
   | string
   | number
   | boolean
-  | IdType
+  | PrimaryKey
   | Entity<N>
   | SingleSelection<T, N>;
 
@@ -19,7 +19,7 @@ export type DataValue<T extends Types> =
   | number
   | boolean
   | null
-  | IdType
+  | PrimaryKey
   | Entity<keyof T & string>;
 
 export function isDataMatch<T extends Types>(
@@ -127,7 +127,7 @@ export class InternalRow<T extends Types, N extends keyof T & string> {
     assert(
       index > -1,
       `You tried to match column ${name} in table ${
-        this.entity.table
+      this.entity.table
       } but it didn't exist (columns: ${this.columnNames.join(", ")})`
     );
 
@@ -177,9 +177,9 @@ export type SpecifiedQuery<T extends Types, K extends keyof T> = {
 };
 
 export default class Table<T extends Types, N extends keyof T & string> {
-  readonly map = new PrimaryKeyMap<InternalRow<T, N>>();
+  @tracked map = new PrimaryKeyMap<InternalRow<T, N>>();
 
-  constructor(readonly name: N, private schema: Schema) {}
+  constructor(readonly name: N, private schema: Schema) { }
 
   get [SCHEMA](): Schema {
     return this.schema;
@@ -203,6 +203,9 @@ export default class Table<T extends Types, N extends keyof T & string> {
 
   [ADD_ROW](row: InternalRow<T, N>): Entity<N> {
     this.map.set(row.id, row);
+
+    // hack: notify the map
+    this.map = this.map;
 
     return {
       table: this.name,
@@ -241,5 +244,11 @@ export default class Table<T extends Types, N extends keyof T & string> {
     );
     this[ADD_ROW](userRow);
     return userRow;
+  }
+
+  replace(id: PrimaryKey, newRow: SpecifiedRow<T, N>) {
+    // TODO: Assert all columns present
+    let row = this.get(id);
+    row.update(newRow);
   }
 }

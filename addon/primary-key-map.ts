@@ -1,9 +1,10 @@
 import { PrimaryKey, IdValue } from "./table";
+import { TrackedMap } from "tracked-built-ins";
 
 type PrivateMap<T> = Map<IdValue, T | PrivateMap<T>>;
 
 export default class PrimaryKeyMap<T> {
-  private map: PrivateMap<T> = new Map();
+  private map: PrivateMap<T> = new TrackedMap();
 
   private entry(
     key: PrimaryKey
@@ -17,18 +18,24 @@ export default class PrimaryKeyMap<T> {
     let tail = key.slice(-1)[0];
 
     for (let part of head) {
-      let next = current.get(part);
+      if (current.has(part)) {
+        let next = current.get(part);
 
-      if (next instanceof Map) {
-        current = next;
+        if (next instanceof TrackedMap) {
+          current = next;
+        } else {
+          // we're looking for something like `(foo, bar)` but the composite
+          // key for this table is more than two long
+          return;
+        }
       } else {
-        return;
+        current = new TrackedMap();
       }
     }
 
     let next = current.get(tail);
 
-    if (next instanceof Map) {
+    if (next instanceof TrackedMap) {
       return;
     } else {
       return { map: current, key: tail } as any;
@@ -68,7 +75,7 @@ function keys(map: PrivateMap<unknown>, stack: IdValue[] = []): PrimaryKey[] {
   let out = [];
 
   for (let [key, value] of map.entries()) {
-    if (value instanceof Map) {
+    if (value instanceof TrackedMap) {
       out.push(...keys(value, [...stack, key]));
     } else {
       out.push([...stack, key]);

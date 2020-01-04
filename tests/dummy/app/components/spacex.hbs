@@ -1,1 +1,5 @@
-<h2>{{count @model}}</h2>
+<h2>{{count @model}} Launches</h2>
+
+{{#each @model as |launch|}}
+  <Launch @launch={{launch}} />
+{{/each}}

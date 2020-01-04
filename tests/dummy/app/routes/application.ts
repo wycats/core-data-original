@@ -21,7 +21,7 @@ export default class IndexRoute extends Route {
     }, 10);
 
     let missions = db.populate("mission", {
-      name: () => faker.fake("{{commerce.adjective}}"),
+      name: () => faker.fake("{{commerce.productAdjective}} {{commerce.productMaterial}} {{system.semver}}"),
     }, 100);
 
     db.populate("launch", {

@@ -1,10 +1,10 @@
-import Schema, { IdType } from "./schema";
+import Schema from "./schema";
 import { SingleSelection, Query } from "./selection";
 import PrimaryKeyMap from "./primary-key-map";
 import { Types } from "./database";
-export declare type SpecifiedDataType<T extends Types, N extends keyof T & string> = string | number | boolean | IdType | Entity<N> | SingleSelection<T, N>;
+export declare type SpecifiedDataType<T extends Types, N extends keyof T & string> = string | number | boolean | PrimaryKey | Entity<N> | SingleSelection<T, N>;
 export declare type IdValue = string | number | boolean;
-export declare type DataValue<T extends Types> = string | number | boolean | null | IdType | Entity<keyof T & string>;
+export declare type DataValue<T extends Types> = string | number | boolean | null | PrimaryKey | Entity<keyof T & string>;
 export declare function isDataMatch<T extends Types>(left: DataValue<T>, right: DataValue<T>): boolean;
 export declare function isIdMatch(left: PrimaryKey, right: PrimaryKey): boolean;
 export declare function isEntity<T extends Types, N extends keyof T & string>(data: DataValue<T>): data is Entity<N>;
@@ -51,7 +51,7 @@ export declare type SpecifiedQuery<T extends Types, K extends keyof T> = {
 export default class Table<T extends Types, N extends keyof T & string> {
     readonly name: N;
     private schema;
-    readonly map: PrimaryKeyMap<InternalRow<T, N>>;
+    map: PrimaryKeyMap<InternalRow<T, N>>;
     constructor(name: N, schema: Schema);
     get [SCHEMA](): Schema;
     [EMPTY](): Table<T, N>;
@@ -61,4 +61,5 @@ export default class Table<T extends Types, N extends keyof T & string> {
     first(): Entity<N>;
     get(id: PrimaryKey): InternalRow<T, N>;
     add(row: SpecifiedRow<T, N>): InternalRow<T, N>;
+    replace(id: PrimaryKey, newRow: SpecifiedRow<T, N>): void;
 }

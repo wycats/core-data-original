@@ -1,6 +1,6 @@
 import Schema from "./schema";
 import { MultipleSelection, SingleSelection } from "./selection";
-import Table, { DataValue, Entity, InternalRow } from "./table";
+import Table, { DataValue, Entity, InternalRow, SpecifiedRow, PrimaryKey } from "./table";
 interface FakeData {
     [key: string]: () => unknown;
 }
@@ -22,6 +22,8 @@ export default class Database<T extends Types> {
     update<N extends keyof T & string>(entity: Entity<N>, updates: {
         [key: string]: DataValue<T>;
     }): void;
+    add<N extends keyof T & string>(name: N, row: SpecifiedRow<T, N>): void;
     populate<N extends keyof T & string>(name: N, data: FakeData, amount: number): Entity<N>[];
+    nextId(): PrimaryKey;
 }
 export {};

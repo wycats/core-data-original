@@ -1,0 +1,11 @@
+<div class="launch">
+  {{#with (select "site" "mission.name" "rocket.name" "isBooked" from=@launch db=(use "spacex")) as |launch|}}
+    {{log launch}}
+    <p>Site: {{launch.site}}</p>
+    <p>Mission: {{launch.mission.name}}</p>
+    <p>Rocket: {{launch.rocket.name}}</p>
+    <p>Booked?
+      {{launch.isBooked}}
+      <input {{on "click" this.book}} type="checkbox" checked={{launch.isBooked}}></p>
+  {{/with}}
+</div>

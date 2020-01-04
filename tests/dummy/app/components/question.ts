@@ -2,6 +2,7 @@ import Component from "@glimmer/component";
 import { use, QandaDb } from "dummy/services/db";
 import { Entity } from "core-data/table";
 import { action } from "@ember/object";
+import faker from "faker";
 
 export default class extends Component {
   @use db!: QandaDb;
@@ -9,17 +10,38 @@ export default class extends Component {
   declare args: { question: Entity<"question"> };
 
   @action
-  upvote() {
-    let { upvotes } = this.db.find(this.args.question).select("upvotes");
+  vote(direction: "up" | "down") {
+    let question = this.args.question;
 
-    this.db.update(this.args.question, { upvotes: upvotes + 1 });
+    switch (direction) {
+      case "up":
+        let { upvotes } = this.db.find(question).select("upvotes");
+        this.db.update(question, { upvotes: upvotes + 1 });
+        return;
+
+      case "down":
+        let { downvotes } = this.db.find(question).select("downvotes");
+        this.db.update(question, { downvotes: downvotes + 1 });
+        return;
+    }
   }
 
   @action
-  downvote() {
-    let { downvotes } = this.db.find(this.args.question).select("downvotes");
+  generateAnswer() {
+    let users = this.db.all("user");
 
-    this.db.update(this.args.question, { downvotes: downvotes + 1 });
+    this.db.add("answer", {
+      id: this.db.nextId(),
+      by: faker.random.arrayElement([...users]),
+      body: faker.lorem.paragraphs(),
+      question: this.args.question,
+      upvotes: 0,
+      downvotes: 0
+    });
+  }
+
+  get answers() {
+    return [...this.db.all("answer").where({ question: this.args.question })];
   }
 
   get votes() {
@@ -29,10 +51,6 @@ export default class extends Component {
       .select("upvotes", "downvotes");
 
     return upvotes - downvotes;
-  }
-
-  get answers() {
-    return this.db.all("answer").where({ question: this.args.question });
   }
 
   get answerCount() {
