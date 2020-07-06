@@ -1,6 +1,7 @@
 import { TrackedMap } from "tracked-built-ins";
-import { RowForModelManager, RowId, SomeModelManager } from "./manager";
-import { SomeDefinedModel, DefinedModel } from "./model";
+import { RowForModelManager, RowId, SomeModelManager, IdKind } from "./manager";
+import { DefinedModel } from "./model";
+import { Store } from "./index";
 
 export type RowRecord<F extends readonly string[]> = {
   [P in F[number]]: unknown;
@@ -11,38 +12,54 @@ export class Table<D, M extends SomeModelManager> {
   #manager: M;
 
   #rows: Map<
-    RowId<D, RowForModelManager<M>>,
+    string, // localId
     RowForModelManager<M>
   > = new TrackedMap();
 
-  constructor(model: DefinedModel<D, M>) {
+  constructor(model: DefinedModel<D, M>, private store: Store) {
     this.#definition = model.definition;
     this.#manager = model.manager;
   }
 
-  preload(id: string): RowId<D, RowForModelManager<M>> {
-    return RowId.remote(this.#definition, id);
+  lazy(id: string): RowId<D, RowForModelManager<M>, IdKind.LazyNotLoaded> {
+    return RowId.lazy(this.#definition, id, this.store);
   }
 
-  load(row: RowForModelManager<M>): RowId<D, RowForModelManager<M>> {
-    let rowId = this.#manager.getRowId(row) as RowId<D, RowForModelManager<M>>;
-    this.#rows.set(rowId, row);
+  lazyLocal(): RowId<D, RowForModelManager<M>, IdKind.LazyLocal> {
+    return RowId.lazyLocal(this.#definition, this.store);
+  }
+
+  load(
+    row: RowForModelManager<M>,
+    id?: RowId<D, RowForModelManager<M>, IdKind.LazyNotLoaded>
+  ): RowId<D, RowForModelManager<M>, IdKind.Loaded> {
+    let rowId = this.#manager.getRowId(row) as RowId<
+      D,
+      RowForModelManager<M>,
+      IdKind.Loaded
+    >;
+    this.#rows.set(rowId.localId, row);
     return rowId;
   }
 
-  preadd(): RowId<D, RowForModelManager<M>> {
-    return RowId.local(this.#definition);
-  }
-
-  add(
+  create(
     row: RowForModelManager<M>,
-    id = RowId.local(this.#definition)
-  ): RowId<D, RowForModelManager<M>> {
-    this.#rows.set(id, row);
+    id: RowId<D, RowForModelManager<M>, IdKind.LazyLocal> = RowId.local(
+      this.#definition,
+      this.store
+    )
+  ): RowId<D, RowForModelManager<M>, IdKind.Local> {
+    this.#rows.set(id.localId, row);
     return id;
   }
 
-  get(rowId: RowId<D, RowForModelManager<M>>): RowForModelManager<M> | null {
-    return this.#rows.get(rowId) || null;
+  has(localId: string): boolean {
+    return this.#rows.has(localId);
+  }
+
+  get(
+    rowId: RowId<D, RowForModelManager<M>, IdKind.Loaded | IdKind.Local>
+  ): RowForModelManager<M> | null {
+    return this.#rows.get(rowId.localId) || null;
   }
 }

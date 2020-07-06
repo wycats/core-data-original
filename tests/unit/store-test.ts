@@ -1,118 +1,35 @@
-import {
-  createStore,
-  DATA,
-  DefinedModel,
-  ID,
-  Model,
-  ModelArgs,
-  ModelManager,
-  RowId,
-  RowValue,
-  SomeModelClass,
-  STORE,
-  Store,
-} from "ember-state";
+import { createStore, Model, ModelSchema, Store, table } from "ember-state";
 import { module, QUnitAssert, test } from "../utils";
 
-function attr<M extends ModelArgs, D = Exclude<M, RowValue | RowValue[]>>(
-  _target: Model<M>,
-  key: keyof D
-): any {
-  return {
-    enumerable: true,
-    configurable: true,
-    get() {
-      return this[DATA].attributes[key];
-    },
-  };
-}
-
-function hasMany<M extends ModelArgs, D = Extract<M, RowValue[]>>(
-  _target: Model<M>,
-  key: keyof D
-): any {
-  return {
-    enumerable: true,
-    configurable: true,
-    get() {
-      let objs: RowId<any, any>[] = this[DATA].hasMany[key];
-      return objs.map((o) => this[STORE].deref(o));
-    },
-  };
-}
-
-class ModelDefinition<
-  Class extends SomeModelClass,
-  Row extends InstanceType<Class> = InstanceType<Class>,
-  Args extends ModelArgs = Row extends Model<infer Args> ? Args : ModelArgs
->
-  implements
-    ModelManager<Class, Args, Row>,
-    DefinedModel<Class, ModelManager<Class, Args, Row>> {
-  constructor(private Class: Class) {}
-
-  get manager() {
-    return this;
-  }
-
-  get definition() {
-    return this.Class;
-  }
-
-  create(
-    store: Store,
-    data: Args,
-    id: RowId<Class, Row> = RowId.local(this.Class)
-  ): Row {
-    return new this.Class(store, data, id) as Row;
-  }
-
-  getRowId(bucket: Row): RowId<Class, Row> {
-    return (bucket as any)[ID] as RowId<Class, Row>;
-  }
-}
-
-interface MaterialData {
+interface MaterialSchema {
   name: string;
   source: string | null;
-  activities: RowId<typeof Activity, Activity>[];
+  activities: typeof ActivityTable[];
 }
 
-class Material extends Model<MaterialData> {
-  @attr name!: string;
-  @attr source!: string | null;
-  @hasMany activities!: Activity[];
-}
+class Material extends Model<MaterialSchema> {}
+const MaterialTable = table(Material);
+type MaterialTable = typeof MaterialTable;
 
-const MaterialTable = new ModelDefinition(Material);
-
-interface ActivityData extends ModelArgs {
+interface ActivitySchema extends ModelSchema {
   name: string;
   category: string | null;
-  materials: RowId<typeof Material, Material>[];
-  days: RowId<typeof Day, Day>[];
+  materials: MaterialTable[];
+  days: DayTable[];
 }
 
-class Activity extends Model<ActivityData> {
-  @attr name!: string;
-  @attr category!: string | null;
-  @hasMany materials!: Material[];
-  @hasMany days!: Day[];
-}
+class Activity extends Model<ActivitySchema> {}
+const ActivityTable = table(Activity);
+type ActivityTable = typeof ActivityTable;
 
-const ActivityTable = new ModelDefinition(Activity);
-
-interface DayData extends ModelArgs {
+interface DayData extends ModelSchema {
   date: string;
-  activities: RowId<typeof Activity, Activity>[];
+  activities: ActivityTable[];
 }
 
-class Day extends Model<DayData> {
-  @attr date!: string;
-  @hasMany activities!: Activity[];
-}
-
-const DayTable = new ModelDefinition(Day);
+class Day extends Model<DayData> {}
+const DayTable = table(Day);
+type DayTable = typeof DayTable;
 
 function setup(): Store {
   let store = createStore();
@@ -131,52 +48,84 @@ export class DatabaseTest {
 
   @test record() {
     let store = this.#store;
-    let material = store.table(MaterialTable);
 
-    let soap = store.create(MaterialTable, {
+    let soapId = store.create(MaterialTable, {
       name: "Soap",
       source: null,
       activities: [],
     });
 
-    let row = material.get(soap);
+    let soap = store.deref(soapId);
 
-    this.assert.equal(row?.name, "Soap");
+    this.assert.equal(soap.name, "Soap");
+    this.assert.equal(soap.source, null);
   }
 
   @test relationship() {
-    let store = this.#store;
-    let activities = store.table(ActivityTable);
+    let bubbles = this.#store.lazyLocal(ActivityTable);
 
-    let bubbles = activities.preadd();
-
-    let soap = store.create(MaterialTable, {
+    let soapId = this.#store.create(MaterialTable, {
       name: "Soap",
       source: null,
       activities: [bubbles],
     });
 
-    store.create(
+    this.#store.create(
       ActivityTable,
       {
         name: "Bubbles",
         category: null,
-        materials: [soap],
+        materials: [soapId],
         days: [],
       },
       bubbles
     );
 
-    let soapRecord = store.deref(soap);
-    this.assert.equal(soapRecord.name, "Soap", "name=Soap");
-    this.assert.equal(soapRecord.source, null, "source=null");
+    let soap = this.#store.deref(soapId);
+    this.assert.equal(soap.name, "Soap", "name=Soap");
+    this.assert.equal(soap.source, null, "source=null");
     this.assert.deepEqual(
-      soapRecord.activities,
-      [store.deref(bubbles)],
+      soap.activities,
+      [this.#store.deref(bubbles)],
       "activities=[bubbles]"
     );
     this.assert.deepEqual(
-      soapRecord.activities.map((a) => a.name),
+      soap.activities.map((a) => a.name),
+      ["Bubbles"],
+      "activities.name=['Bubbles']"
+    );
+  }
+
+  @test remoteRelationship() {
+    let bubbles = this.#store.lazy(ActivityTable, "1");
+
+    let soapId = this.#store.create(MaterialTable, {
+      name: "Soap",
+      source: null,
+      activities: [bubbles],
+    });
+
+    this.#store.load(
+      ActivityTable,
+      {
+        name: "Bubbles",
+        category: null,
+        materials: [soapId],
+        days: [],
+      },
+      bubbles
+    );
+
+    let soap = this.#store.deref(soapId);
+    this.assert.equal(soap.name, "Soap", "name=Soap");
+    this.assert.equal(soap.source, null, "source=null");
+    this.assert.deepEqual(
+      soap.activities,
+      [this.#store.deref(bubbles)],
+      "activities=[bubbles]"
+    );
+    this.assert.deepEqual(
+      soap.activities.map((a) => a.name),
       ["Bubbles"],
       "activities.name=['Bubbles']"
     );
