@@ -1,29 +1,32 @@
 import { Store } from "./index";
 import {
-  ConstructorModelSchema,
   markRowValue,
   ModelManager,
-  ModelSchema,
+  ModelData,
   RowId,
   RowValue,
   ROW_VALUE,
   SomeModelManager,
   SomeRowId,
+  SomeModelSchema,
+  ModelMetadataArgs,
+  ModelDataArgs,
 } from "./manager";
-import { ModelFactory } from "./definition";
 
-export const ARGS = Symbol("ARGS");
+export const DATA_STORAGE = Symbol("DATA_STORAGE");
+export const META_STORAGE = Symbol("META_STORAGE");
 export const STORE = Symbol("STORE");
 export const ID = Symbol("ID");
 
 export interface DefinedModel<Definition, Manager extends SomeModelManager> {
+  name: string;
   definition: Definition;
   manager: Manager;
 }
 
 export type SomeDefinedModel = DefinedModel<unknown, SomeModelManager>;
 
-export type InstancePropertiesForSchema<Schema extends ModelSchema> = {
+export type InstancePropertiesForSchema<Schema extends SomeModelSchema> = {
   [P in keyof Schema]: Schema[P] extends SomeDefinedModel[]
     ? HasMany<Schema[P]>
     : Schema[P] extends SomeDefinedModel
@@ -32,15 +35,15 @@ export type InstancePropertiesForSchema<Schema extends ModelSchema> = {
 };
 
 type HasMany<R extends SomeDefinedModel[]> = R extends DefinedModel<
-  unknown,
-  ModelManager<unknown, ModelSchema, infer Row>
+  any,
+  ModelManager<any, any, infer Row>
 >[]
   ? Row[]
   : never;
 
 type BelongsTo<R extends SomeDefinedModel> = R extends DefinedModel<
-  unknown,
-  ModelManager<unknown, ModelSchema, infer Row>
+  any,
+  ModelManager<any, any, infer Row>
 >
   ? Row
   : never;
@@ -48,12 +51,12 @@ type BelongsTo<R extends SomeDefinedModel> = R extends DefinedModel<
 export const MODEL_MANAGER = Symbol("MODEL_MANAGER");
 export type MODEL_MANAGER = typeof MODEL_MANAGER;
 
-export interface DelegateConstructor<Schema> {
+export interface DelegateConstructor<Schema extends SomeModelSchema> {
   new (schema: Schema, store: Store): InstancePropertiesForSchema<Schema>;
 }
 
 export function ModelForSchema<
-  Schema extends ModelSchema
+  Schema extends SomeModelSchema
 >(): DelegateConstructor<Schema> {
   return (function () {
     function DelegatingClass(this: any, schema: Schema, store: Store) {
@@ -96,9 +99,10 @@ export function ModelForSchema<
   })() as any;
 }
 
-function ModelConstructor<Schema extends ModelSchema>(
+function ModelConstructor<Schema extends SomeModelSchema>(
   store: Store,
-  args: ConstructorModelSchema<Schema>,
+  data: ModelDataArgs<Schema>,
+  meta: ModelMetadataArgs<Schema>,
   id: SomeRowId
 ) {
   /**
@@ -109,7 +113,10 @@ function ModelConstructor<Schema extends ModelSchema>(
     [ROW_VALUE]!: true;
 
     /** @internal */
-    [ARGS]: ConstructorModelSchema<Schema>;
+    [DATA_STORAGE]: ModelDataArgs<Schema>;
+
+    /** @internal */
+    [META_STORAGE]: unknown;
 
     /** @internal */
     readonly [STORE]: Store;
@@ -119,12 +126,13 @@ function ModelConstructor<Schema extends ModelSchema>(
 
     constructor(
       store: Store,
-      args: ConstructorModelSchema<Schema>,
+      data: ModelDataArgs<Schema>,
+      meta: ModelMetadataArgs<Schema>,
       id: SomeRowId
     ) {
       let row = this;
 
-      for (const [key, value] of Object.entries(args)) {
+      for (const [key, value] of Object.entries(data)) {
         if (value instanceof RowId) {
           Object.defineProperty(row, key, {
             enumerable: true,
@@ -135,14 +143,14 @@ function ModelConstructor<Schema extends ModelSchema>(
           });
         } else if (
           Array.isArray(value) &&
-          value.every((item) => item instanceof RowId)
+          value.every((item: unknown[]) => item instanceof RowId)
         ) {
           // TODO: A better rule for "looks like a has-many array" if possible
           Object.defineProperty(row, key, {
             enumerable: true,
             configurable: true,
             get() {
-              return value.map((item) => store.deref(item));
+              return value.map((item: SomeRowId) => store.deref(item));
             },
           });
         } else {
@@ -157,30 +165,41 @@ function ModelConstructor<Schema extends ModelSchema>(
       }
 
       this[STORE] = store;
-      this[ARGS] = args;
+      this[DATA_STORAGE] = data;
+      this[META_STORAGE] = meta;
       this[ID] = id;
 
       markRowValue(this);
     }
   }
 
-  return new Model(store, args, id) as Model &
+  return new Model(store, data, meta, id) as Model &
     InstancePropertiesForSchema<Schema>;
 }
 
 export const Model = (ModelConstructor as unknown) as {
-  new <Schema extends ModelSchema>(
+  new <Schema extends SomeModelSchema>(
     store: Store,
-    args: ConstructorModelSchema<Schema>,
+    data: ModelDataArgs<Schema>,
+    meta: ModelMetadataArgs<Schema>,
     id: SomeRowId
   ): InstancePropertiesForSchema<Schema>;
 };
 
-export interface ModelClass<Schema extends ModelSchema, Row> {
-  new (store: Store, args: ConstructorModelSchema<Schema>, id: SomeRowId): Row;
+export interface ModelClass<Schema extends SomeModelSchema, Row> {
+  new (
+    store: Store,
+    args: ModelDataArgs<Schema>,
+    meta: ModelMetadataArgs<Schema>,
+    id: SomeRowId
+  ): Row;
 }
 
 export type SomeModelClass = ModelClass<any, any>;
+
+export type RowForModelClass<
+  Class extends SomeModelClass
+> = Class extends ModelClass<any, infer Row> ? Row : never;
 
 export type SchemaForModelClass<
   Class extends SomeModelClass

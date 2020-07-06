@@ -1,30 +1,33 @@
-import { createStore, Model, ModelSchema, Store, table } from "ember-state";
+import { createStore, Model, ModelData, Store, table, META } from "ember-state";
 import { module, QUnitAssert, test } from "../utils";
 
 interface MaterialSchema {
   name: string;
   source: string | null;
-  activities: typeof ActivityTable[];
+  activities: ActivityTable[];
+  [META]: {};
 }
 
 class Material extends Model<MaterialSchema> {}
 const MaterialTable = table(Material);
 type MaterialTable = typeof MaterialTable;
 
-interface ActivitySchema extends ModelSchema {
+interface ActivitySchema {
   name: string;
   category: string | null;
   materials: MaterialTable[];
   days: DayTable[];
+  [META]: {};
 }
 
 class Activity extends Model<ActivitySchema> {}
 const ActivityTable = table(Activity);
 type ActivityTable = typeof ActivityTable;
 
-interface DayData extends ModelSchema {
+interface DayData {
   date: string;
   activities: ActivityTable[];
+  [META]: {};
 }
 
 class Day extends Model<DayData> {}
@@ -49,11 +52,15 @@ export class DatabaseTest {
   @test record() {
     let store = this.#store;
 
-    let soapId = store.create(MaterialTable, {
-      name: "Soap",
-      source: null,
-      activities: [],
-    });
+    let soapId = store.create(
+      MaterialTable,
+      {
+        name: "Soap",
+        source: null,
+        activities: [],
+      },
+      {}
+    );
 
     let soap = store.deref(soapId);
 
@@ -64,11 +71,15 @@ export class DatabaseTest {
   @test relationship() {
     let bubbles = this.#store.lazyLocal(ActivityTable);
 
-    let soapId = this.#store.create(MaterialTable, {
-      name: "Soap",
-      source: null,
-      activities: [bubbles],
-    });
+    let soapId = this.#store.create(
+      MaterialTable,
+      {
+        name: "Soap",
+        source: null,
+        activities: [bubbles],
+      },
+      {}
+    );
 
     this.#store.create(
       ActivityTable,
@@ -78,6 +89,7 @@ export class DatabaseTest {
         materials: [soapId],
         days: [],
       },
+      {},
       bubbles
     );
 
@@ -99,11 +111,15 @@ export class DatabaseTest {
   @test remoteRelationship() {
     let bubbles = this.#store.lazy(ActivityTable, "1");
 
-    let soapId = this.#store.create(MaterialTable, {
-      name: "Soap",
-      source: null,
-      activities: [bubbles],
-    });
+    let soapId = this.#store.create(
+      MaterialTable,
+      {
+        name: "Soap",
+        source: null,
+        activities: [bubbles],
+      },
+      {}
+    );
 
     this.#store.load(
       ActivityTable,
@@ -113,6 +129,7 @@ export class DatabaseTest {
         materials: [soapId],
         days: [],
       },
+      {},
       bubbles
     );
 

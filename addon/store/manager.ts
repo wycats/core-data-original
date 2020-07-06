@@ -12,11 +12,11 @@ export enum IdKind {
 export type PresentId = IdKind.Loaded | IdKind.Local;
 export type LazyId = IdKind.LazyLocal | IdKind.LazyNotLoaded;
 
-export class RowId<Definition, Row, Kind extends IdKind> {
+export class RowId<Definition, _Row> {
   static local<Definition, Row>(
     name: Definition,
     store: Store
-  ): RowId<Definition, Row, IdKind.Local> {
+  ): RowId<Definition, Row> {
     return new RowId(name, v4(), null, store);
   }
 
@@ -24,14 +24,14 @@ export class RowId<Definition, Row, Kind extends IdKind> {
     name: Definition,
     id: string,
     store: Store
-  ): RowId<Definition, Row, IdKind.LazyNotLoaded> {
+  ): RowId<Definition, Row> {
     return new RowId(name, v4(), id, store);
   }
 
   static lazyLocal<Definition, Row>(
     name: Definition,
     store: Store
-  ): RowId<Definition, Row, IdKind.LazyLocal> {
+  ): RowId<Definition, Row> {
     return new RowId(name, v4(), null, store);
   }
 
@@ -39,7 +39,7 @@ export class RowId<Definition, Row, Kind extends IdKind> {
     name: Definition,
     id: string,
     store: Store
-  ): RowId<Definition, Row, IdKind.Loaded> {
+  ): RowId<Definition, Row> {
     return new RowId(name, v4(), id, store);
   }
 
@@ -67,7 +67,11 @@ export class RowId<Definition, Row, Kind extends IdKind> {
   }
 }
 
-export type SomeRowId = RowId<any, any, any>;
+export type SomeRowId = RowId<any, any>;
+
+export type RowForRowId<Id extends SomeRowId> = Id extends RowId<any, infer Row>
+  ? Row
+  : never;
 
 export const ROW_VALUE = Symbol("PHANTOM: ROW_VALUE");
 
@@ -90,48 +94,73 @@ export function isRowValue(value: unknown): value is RowValue {
   );
 }
 
-export type ModelSchema = {
-  [P in keyof object]: unknown | SomeDefinedModel | SomeDefinedModel[];
+export type ModelData = {
+  [P in string]: unknown | SomeDefinedModel | SomeDefinedModel[];
 };
 
+export const META = Symbol("META");
+export type META = typeof META;
+
+export type ModelSchema<D extends ModelData, Metadata> = {
+  [P in keyof D]: D[P];
+} & {
+  [META]: Metadata;
+};
+
+export type SomeModelSchema = ModelSchema<any, any>;
+
 export type RowIdForDefinedModel<
-  S extends SomeDefinedModel,
-  I extends IdKind = IdKind
+  S extends SomeDefinedModel
 > = S extends DefinedModel<
   unknown,
-  ModelManager<infer Definition, ModelSchema, infer Row>
+  ModelManager<infer Definition, SomeModelSchema, infer Row>
 >
-  ? RowId<Definition, Row, I>
+  ? RowId<Definition, Row>
   : never;
 
 export type RowIdForDefinedModels<
-  S extends SomeDefinedModel[],
-  I extends IdKind = IdKind
+  S extends SomeDefinedModel[]
 > = S extends DefinedModel<
   unknown,
-  ModelManager<infer Definition, ModelSchema, infer Row>
+  ModelManager<infer Definition, SomeModelSchema, infer Row>
 >[]
-  ? RowId<Definition, Row, I>[]
+  ? RowId<Definition, Row>[]
   : never;
 
-export type ConstructorModelSchema<Schema extends ModelSchema> = {
-  [P in keyof Schema]: Schema[P] extends SomeDefinedModel
-    ? RowIdForDefinedModel<Schema[P]>
-    : Schema[P] extends SomeDefinedModel[]
-    ? RowIdForDefinedModels<Schema[P]>
-    : Schema[P];
+export type ModelSchemaForDefinedModels<
+  S extends SomeDefinedModel[],
+  I extends IdKind = IdKind
+> = S extends DefinedModel<unknown, ModelManager<any, infer ModelSchema, any>>[]
+  ? ModelSchema
+  : never;
+
+export type ModelDataArgs<Schema extends SomeModelSchema> = {
+  [P in keyof Schema["data"]]: Schema["data"][P] extends SomeDefinedModel
+    ? RowIdForDefinedModel<Schema["data"][P]>
+    : Schema["data"][P] extends SomeDefinedModel[]
+    ? RowIdForDefinedModels<Schema["data"][P]>
+    : Schema["data"][P];
 };
 
-export interface ModelManager<Definition, Schema extends ModelSchema, Row> {
+export type ModelMetadataArgs<Schema extends SomeModelSchema> = {
+  [P in keyof Schema["meta"]]: Schema["meta"][P] extends SomeDefinedModel
+    ? RowIdForDefinedModel<Schema["meta"][P]>
+    : Schema["meta"][P] extends SomeDefinedModel[]
+    ? RowIdForDefinedModels<Schema["meta"][P]>
+    : Schema["meta"][P];
+};
+
+export interface ModelManager<Definition, Schema extends SomeModelSchema, Row> {
   create(
     store: Store,
-    data: Schema,
-    id?: RowId<Definition, Row, IdKind.LazyLocal>
-  ): { id: RowId<Definition, Row, IdKind.Local>; row: Row };
-  getRowId(bucket: Row): RowId<Definition, Row, IdKind.Loaded>;
+    data: Schema[string],
+    meta: Schema[META],
+    id?: RowId<Definition, Row>
+  ): { id: RowId<Definition, Row>; row: Row };
+  getRowId(bucket: Row): RowId<Definition, Row>;
 }
 
-export type SomeModelManager = ModelManager<unknown, ModelSchema, unknown>;
+export type SomeModelManager = ModelManager<unknown, SomeModelSchema, unknown>;
 
 export type SchemaForModelManager<
   M extends SomeModelManager
@@ -139,4 +168,4 @@ export type SchemaForModelManager<
 
 export type RowForModelManager<
   M extends SomeModelManager
-> = M extends ModelManager<unknown, ModelSchema, infer Row> ? Row : never;
+> = M extends ModelManager<unknown, SomeModelSchema, infer Row> ? Row : never;

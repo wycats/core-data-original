@@ -30,6 +30,7 @@
     "ember-cli-htmlbars": "^5.1.2",
     "ember-cli-typescript": "^3.1.4",
     "tracked-built-ins": "^1.0.2",
+    "tracked-maps-and-sets": "^2.1.0",
     "ember-uuid": "^2.1.0"
   },
   "devDependencies": {

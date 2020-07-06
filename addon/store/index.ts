@@ -1,14 +1,18 @@
 import {
-  ConstructorModelSchema,
   RowForModelManager,
   RowId,
   SchemaForModelManager,
   SomeModelManager,
   IdKind,
   RowIdForDefinedModel,
+  ModelDataArgs,
+  ModelMetadataArgs,
+  SomeRowId,
+  RowForRowId,
 } from "./manager";
 import { SomeDefinedModel } from "./model";
 import { Table } from "./table";
+import { ModelFactory } from "./definition";
 
 export class Store {
   #tables: Map<unknown, Table<unknown, SomeModelManager>> = new Map();
@@ -30,19 +34,17 @@ export class Store {
     >;
   }
 
-  lazyLocal<D extends SomeDefinedModel>(
-    defined: D
-  ): RowIdForDefinedModel<D, IdKind.LazyLocal> {
+  lazyLocal<D extends SomeDefinedModel>(defined: D): RowIdForDefinedModel<D> {
     let table = this.table(defined);
-    return table.lazyLocal() as RowIdForDefinedModel<D, IdKind.LazyLocal>;
+    return table.lazyLocal() as RowIdForDefinedModel<D>;
   }
 
   lazy<D extends SomeDefinedModel>(
     defined: D,
     id: string
-  ): RowIdForDefinedModel<D, IdKind.LazyNotLoaded> {
+  ): RowIdForDefinedModel<D> {
     let table = this.table(defined);
-    return table.lazy(id) as RowIdForDefinedModel<D, IdKind.LazyNotLoaded>;
+    return table.lazy(id) as RowIdForDefinedModel<D>;
   }
 
   has<D extends SomeDefinedModel>(
@@ -60,22 +62,25 @@ export class Store {
 
   create<
     D extends SomeDefinedModel,
-    Schema extends SchemaForModelManager<D["manager"]>
+    Schema extends SchemaForModelManager<D["manager"]>,
+    Row extends RowForModelManager<D["manager"]>
   >(
     defined: D,
-    args: ConstructorModelSchema<Schema>,
-    id?: RowId<D["definition"], RowForModelManager<D["manager"]>, IdKind.Local>
-  ): RowIdForDefinedModel<D, IdKind.Local> {
+    data: ModelDataArgs<Schema>,
+    meta: ModelMetadataArgs<Schema>,
+    id?: RowId<D["definition"], Row>
+  ): RowIdForDefinedModel<D> {
     let { manager } = defined;
     let { row, id: newId } = manager.create(
       this,
-      args,
-      id as RowId<D, RowForModelManager<D["manager"]>, IdKind.LazyLocal>
+      data,
+      meta,
+      id as RowId<D, RowForModelManager<D["manager"]>>
     );
     let table = this.table(defined);
 
     table.create(row as RowForModelManager<D["manager"]>, newId);
-    return newId as RowIdForDefinedModel<D, IdKind.Local>;
+    return newId as RowIdForDefinedModel<D>;
   }
 
   load<
@@ -83,27 +88,28 @@ export class Store {
     Schema extends SchemaForModelManager<D["manager"]>
   >(
     defined: D,
-    args: ConstructorModelSchema<Schema>,
-    id: string | RowId<D["definition"], any, IdKind.LazyNotLoaded>
-  ): RowIdForDefinedModel<D, IdKind.Loaded> {
+    data: ModelDataArgs<Schema>,
+    meta: ModelMetadataArgs<Schema>,
+    id: string | RowId<D["definition"], any>
+  ): RowIdForDefinedModel<D> {
     let { manager } = defined;
     let rowId =
       typeof id === "string" ? RowId.lazy(defined.definition, id, this) : id;
-    let { row, id: newId } = manager.create(this, args, rowId);
+    let { row, id: newId } = manager.create(this, data, meta, rowId);
     let table = this.table(defined);
 
     table.load(row as any, newId);
-    return newId as RowIdForDefinedModel<D, IdKind.Loaded>;
+    return newId as RowIdForDefinedModel<D>;
   }
 
-  deref<Row>(id: RowId<unknown, Row, IdKind>): Row {
+  deref<Id extends SomeRowId>(id: Id): RowForRowId<Id> {
     let table = this.#tables.get(id.definition);
 
     if (table === undefined) {
       throw new Error(`BUG: RowId existed for a non-created table`);
     }
 
-    let row = table.get(id) as Row | null;
+    let row = table.get(id) as RowForRowId<Id> | null;
 
     if (row === null) {
       throw new Error(`Attempted to deref an non-existent row`);
