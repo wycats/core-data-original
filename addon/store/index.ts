@@ -1,56 +1,41 @@
 import {
-  RowForModelManager,
-  RowId,
-  SchemaForModelManager,
-  SomeModelManager,
-  IdKind,
-  RowIdForDefinedModel,
-  ModelDataArgs,
-  ModelMetadataArgs,
-  SomeRowId,
+  ModelArgs,
   RowForRowId,
+  RowId,
+  RowIdForModelClass,
+  SomeRowId,
+  SomeModelSchema,
 } from "./manager";
-import { SomeDefinedModel } from "./model";
+import { SchemaForModelClass, SomeModelClass, ModelClass } from "./model";
 import { Table } from "./table";
-import { ModelFactory } from "./definition";
 
 export class Store {
-  #tables: Map<unknown, Table<unknown, SomeModelManager>> = new Map();
+  #tables: Map<unknown, Table<SomeModelClass, any>> = new Map();
 
-  createTable<D extends SomeDefinedModel>(
-    defined: D
-  ): Table<D["definition"], D["manager"]> {
+  createTable<D extends SomeModelClass>(defined: D): Table<D, InstanceType<D>> {
     let table = new Table(defined, this);
-    this.#tables.set(defined.definition, table);
-    return table as Table<D["definition"], D["manager"]>;
+    this.#tables.set(defined, table);
+    return table as Table<D, InstanceType<D>>;
   }
 
-  table<D extends SomeDefinedModel>(
-    defined: D
-  ): Table<D["definition"], D["manager"]> {
-    return this.#tables.get(defined.definition) as Table<
-      D["definition"],
-      D["manager"]
-    >;
+  table<D extends SomeModelClass>(defined: D): Table<D, InstanceType<D>> {
+    return this.#tables.get(defined) as Table<D, InstanceType<D>>;
   }
 
-  lazyLocal<D extends SomeDefinedModel>(defined: D): RowIdForDefinedModel<D> {
+  lazyLocal<D extends SomeModelClass>(defined: D): RowIdForModelClass<D> {
     let table = this.table(defined);
-    return table.lazyLocal() as RowIdForDefinedModel<D>;
+    return table.lazyLocal() as RowIdForModelClass<D>;
   }
 
-  lazy<D extends SomeDefinedModel>(
+  lazy<D extends SomeModelClass>(
     defined: D,
     id: string
-  ): RowIdForDefinedModel<D> {
+  ): RowIdForModelClass<D> {
     let table = this.table(defined);
-    return table.lazy(id) as RowIdForDefinedModel<D>;
+    return table.lazy(id) as RowIdForModelClass<D>;
   }
 
-  has<D extends SomeDefinedModel>(
-    definition: D["definition"],
-    localId: string
-  ): boolean {
+  has<D extends SomeModelClass>(definition: D, localId: string): boolean {
     let table = this.#tables.get(definition);
 
     if (table === undefined) {
@@ -60,46 +45,34 @@ export class Store {
     return table.has(localId);
   }
 
-  create<
-    D extends SomeDefinedModel,
-    Schema extends SchemaForModelManager<D["manager"]>,
-    Row extends RowForModelManager<D["manager"]>
-  >(
+  create<D extends SomeModelClass>(
     defined: D,
-    data: ModelDataArgs<Schema>,
-    meta: ModelMetadataArgs<Schema>,
-    id?: RowId<D["definition"], Row>
-  ): RowIdForDefinedModel<D> {
-    let { manager } = defined;
-    let { row, id: newId } = manager.create(
-      this,
-      data,
-      meta,
-      id as RowId<D, RowForModelManager<D["manager"]>>
-    );
+    data: ModelArgs<SchemaForModelClass<D>>,
+    id = RowId.local(defined, this) as RowIdForModelClass<D>
+  ): RowIdForModelClass<D> {
+    let row = new defined(this, data, id);
     let table = this.table(defined);
 
-    table.create(row as RowForModelManager<D["manager"]>, newId);
-    return newId as RowIdForDefinedModel<D>;
+    table.created(row as InstanceType<D>, id as RowIdForModelClass<D>);
+
+    return id;
   }
 
-  load<
-    D extends SomeDefinedModel,
-    Schema extends SchemaForModelManager<D["manager"]>
-  >(
+  load<D extends SomeModelClass, Schema extends SchemaForModelClass<D>>(
     defined: D,
-    data: ModelDataArgs<Schema>,
-    meta: ModelMetadataArgs<Schema>,
-    id: string | RowId<D["definition"], any>
-  ): RowIdForDefinedModel<D> {
-    let { manager } = defined;
+    data: ModelArgs<Schema>,
+    id: string | RowIdForModelClass<D>
+  ): RowIdForModelClass<D> {
     let rowId =
-      typeof id === "string" ? RowId.lazy(defined.definition, id, this) : id;
-    let { row, id: newId } = manager.create(this, data, meta, rowId);
+      typeof id === "string"
+        ? (RowId.lazy(defined, id, this) as RowIdForModelClass<D>)
+        : id;
+
+    let row = new defined(this, data, rowId);
     let table = this.table(defined);
 
-    table.load(row as any, newId);
-    return newId as RowIdForDefinedModel<D>;
+    table.loaded(row as InstanceType<D>, rowId);
+    return rowId;
   }
 
   deref<Id extends SomeRowId>(id: Id): RowForRowId<Id> {

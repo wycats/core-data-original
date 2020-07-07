@@ -1,25 +1,23 @@
 import { TrackedMap } from "tracked-built-ins";
-import { RowForModelManager, RowId, SomeModelManager, IdKind } from "./manager";
-import { DefinedModel } from "./model";
 import { Store } from "./index";
+import { META, RowId, SomeModelSchema, RowIdForModelClass } from "./manager";
+import { ID, ModelClass, SomeModelClass } from "./model";
 
 export type RowRecord<F extends readonly string[]> = {
   [P in F[number]]: unknown;
 };
 
-export class Table<D, M extends SomeModelManager> {
+export class Table<D extends SomeModelClass, Row extends InstanceType<D>> {
   #definition: D;
-  #manager: M;
   #name: string;
 
   #rows: Map<
     string, // localId
-    RowForModelManager<M>
+    Row
   > = new TrackedMap();
 
-  constructor(model: DefinedModel<D, M>, private store: Store) {
-    this.#definition = model.definition;
-    this.#manager = model.manager;
+  constructor(model: D, private store: Store) {
+    this.#definition = model;
     this.#name = model.name;
   }
 
@@ -27,30 +25,25 @@ export class Table<D, M extends SomeModelManager> {
     return this.#name;
   }
 
-  lazy(id: string): RowId<D, RowForModelManager<M>> {
+  lazy(id: string): RowId<D, Row[META], Row> {
     return RowId.lazy(this.#definition, id, this.store);
   }
 
-  lazyLocal(): RowId<D, RowForModelManager<M>> {
+  lazyLocal(): RowId<D, Row[META], Row> {
     return RowId.lazyLocal(this.#definition, this.store);
   }
 
-  load(
-    row: RowForModelManager<M>,
-    id?: RowId<D, RowForModelManager<M>>
-  ): RowId<D, RowForModelManager<M>> {
-    let rowId = this.#manager.getRowId(row) as RowId<D, RowForModelManager<M>>;
+  loaded(row: Row, id?: RowId<D, Row[META], Row>): RowId<D, Row[META], Row> {
+    let rowId = row[ID];
+    // let rowId = this.#manager.getRowId(row) as RowIdForModelManager<M>;
     this.#rows.set(rowId.localId, row);
     return rowId;
   }
 
-  create(
-    row: RowForModelManager<M>,
-    id: RowId<D, RowForModelManager<M>> = RowId.local(
-      this.#definition,
-      this.store
-    )
-  ): RowId<D, RowForModelManager<M>> {
+  created(
+    row: Row,
+    id = RowId.local(this.#definition, this.store) as RowId<D, Row[META], Row>
+  ): RowId<D, Row[META], Row> {
     this.#rows.set(id.localId, row);
     return id;
   }
@@ -59,7 +52,7 @@ export class Table<D, M extends SomeModelManager> {
     return this.#rows.has(localId);
   }
 
-  get(rowId: RowId<D, RowForModelManager<M>>): RowForModelManager<M> | null {
+  get(rowId: RowIdForModelClass<D>): Row | null {
     return this.#rows.get(rowId.localId) || null;
   }
 }
