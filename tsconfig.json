@@ -13,6 +13,7 @@
     "baseUrl": ".",
     "module": "esnext",
     "experimentalDecorators": true,
+    "typeRoots": ["types"],
     "paths": {
       "dummy/tests/*": ["tests/*"],
       "dummy/*": ["tests/dummy/app/*", "app/*"],

@@ -6,7 +6,9 @@ import {
   Model,
   SomeModel,
   ModelConstructor,
+  MetaForModelClass,
 } from "./model";
+import { tracked } from "tracked-built-ins";
 
 export enum IdKind {
   Local = "Local",
@@ -18,83 +20,87 @@ export enum IdKind {
 export type PresentId = IdKind.Loaded | IdKind.Local;
 export type LazyId = IdKind.LazyLocal | IdKind.LazyNotLoaded;
 
-export class RowId<Definition extends SomeModelClass, Meta, _Row> {
-  static local<Definition extends SomeModelClass, Meta, Row>(
-    name: Definition,
-    store: Store,
-    meta: Meta | null = null
-  ): RowId<Definition, Meta, Row> {
-    return new RowId(name, meta, v4(), null, store);
-  }
-
-  static lazy<Definition extends SomeModelClass, Meta, Row>(
-    name: Definition,
-    id: string,
-    store: Store,
-    meta: Meta | null = null
-  ): RowId<Definition, Meta, Row> {
-    return new RowId(name, meta, v4(), id, store);
-  }
-
-  static lazyLocal<Definition extends SomeModelClass, Meta, Row>(
-    name: Definition,
-    store: Store,
-    meta: Meta | null = null
-  ): RowId<Definition, Meta, Row> {
-    return new RowId(name, meta, v4(), null, store);
-  }
-
-  static loaded<Definition extends SomeModelClass, Meta, Row>(
-    name: Definition,
-    id: string,
-    store: Store,
-    meta: Meta | null = null
-  ): RowId<Definition, Meta, Row> {
-    return new RowId(name, meta, v4(), id, store);
-  }
+export abstract class RowId<Class extends SomeModelClass> {
+  @tracked _meta: InstanceType<Class>[META] | null;
 
   constructor(
-    readonly definition: Definition,
-    readonly meta: Meta | null,
+    readonly definition: Class,
+    meta: InstanceType<Class>[META] | null,
     readonly localId: string,
-    private remoteId: string | null = null,
-    private store: Store
-  ) {}
+    readonly remoteId: string | null = null,
+    protected store: Store
+  ) {
+    this._meta = meta;
+  }
 
-  get kind(): IdKind {
-    if (this.remoteId === null) {
-      if (this.store.has(this.definition, this.localId)) {
-        return IdKind.Local;
-      } else {
-        return IdKind.LazyLocal;
-      }
-    } else {
-      if (this.store.has(this.definition, this.localId)) {
-        return IdKind.Loaded;
-      } else {
-        return IdKind.LazyNotLoaded;
-      }
-    }
+  abstract isLazy: boolean;
+
+  get meta(): MetaForModelClass<Class> | null {
+    return this._meta;
+  }
+
+  updateMeta(meta: MetaForModelClass<Class>): void {
+    this._meta = meta;
   }
 }
 
-export type SomeRowId = RowId<any, any, any>;
+export class LazyRowId<Class extends SomeModelClass> extends RowId<Class> {
+  static local<Class extends SomeModelClass>(
+    name: Class,
+    store: Store,
+    meta: MetaForModelClass<Class> | null = null
+  ): LazyRowId<Class> {
+    return new LazyRowId(name, meta, v4(), null, store);
+  }
 
-export type RowForRowId<Id extends SomeRowId> = Id extends RowId<
-  any,
-  any,
-  infer Row
->
-  ? Row
-  : never;
+  static remote<Class extends SomeModelClass, Meta = InstanceType<Class>[META]>(
+    name: Class,
+    id: string,
+    store: Store,
+    meta: Meta | null = null
+  ): LazyRowId<Class> {
+    return new LazyRowId(name, meta, v4(), id, store);
+  }
 
-export type MetaForRowId<Id extends SomeRowId> = Id extends RowId<
-  any,
-  infer Meta,
-  any
->
-  ? Meta
-  : never;
+  readonly isLazy = true;
+
+  intoPresent(): PresentRowId<Class> {
+    return new PresentRowId(
+      this.definition,
+      this._meta,
+      this.localId,
+      this.remoteId,
+      this.store
+    );
+  }
+}
+
+export class PresentRowId<Class extends SomeModelClass> extends RowId<Class> {
+  static local<Class extends SomeModelClass>(
+    name: Class,
+    store: Store,
+    meta: MetaForModelClass<Class> | null = null
+  ): PresentRowId<Class> {
+    return new PresentRowId(name, meta, v4(), null, store);
+  }
+
+  static remote<Class extends SomeModelClass>(
+    name: Class,
+    id: string,
+    store: Store,
+    meta: MetaForModelClass<Class> | null = null
+  ): RowId<Class> {
+    return new PresentRowId(name, meta, v4(), id, store);
+  }
+
+  readonly isLazy = false;
+
+  get row(): InstanceType<Class> {
+    return this.store.deref(this) as InstanceType<Class>;
+  }
+}
+
+export type SomeRowId = RowId<SomeModelClass>;
 
 export const ROW_VALUE = Symbol("PHANTOM: ROW_VALUE");
 
@@ -130,16 +136,18 @@ export type ModelSchema<D extends ModelData, Metadata> = D & {
 
 export type SomeModelSchema = ModelSchema<ModelData, any>;
 
-export type RowIdForModelClass<C extends SomeModelClass> = C extends ModelClass<
-  infer Schema
->
-  ? RowId<C, InstanceType<C>[META], InstanceType<C>>
-  : never;
+export type ModelId<S extends SomeModelSchema> = RowId<ModelClass<S>>;
 
 export type ModelArgs<Schema extends SomeModelSchema> = {
-  [P in keyof Schema]: Schema[P] extends ModelConstructor<infer Schema>
-    ? RowId<ModelClass<Schema>, Schema[META], Model<Schema>>
-    : Schema[P] extends ModelConstructor<infer Schema>[]
-    ? RowId<ModelClass<Schema>, Schema[META], Model<Schema>>[]
+  [P in keyof Schema]: Schema[P] extends ModelConstructor<infer S>
+    ? ModelId<S>
+    : Schema[P] extends ModelConstructor<infer S>[]
+    ? ModelId<S>[]
     : Schema[P];
 };
+
+export type ArgsForModelClass<C extends SomeModelClass> = C extends ModelClass<
+  infer Schema
+>
+  ? ModelArgs<Schema>
+  : never;
